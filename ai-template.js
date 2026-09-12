@@ -1,0 +1,56 @@
+/* British Facebook — Gemini AI Template Designer
+ * AI is used only to create a reusable JSON template. Rendering stays local.
+ * NOTE: API keys entered here are stored only in this browser and are exposed to the client.
+ * For a public production app, move Gemini calls behind a server-side proxy.
+ */
+(function(){
+  const MODEL='gemini-3.8-flash';
+  const KEY_STORE='bfGeminiKey';
+  const TEMPLATE_STORE='bfAITemplates';
+  const $=s=>document.querySelector(s);
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  const schema={type:'object',properties:{id:{type:'string'},name:{type:'string'},description:{type:'string'},preview:{type:'string'},background:{type:'object',properties:{mode:{type:'string',enum:['adaptive','fixed']},start:{type:'string'},end:{type:'string'}},required:['mode']},layers:{type:'array',items:{type:'object',properties:{type:{type:'string',enum:['text','product','badge','shape']},content:{type:'string'},source:{type:'string'},text:{type:'string'},font:{type:'string'},size:{type:'number'},weight:{type:'number'},color:{type:'string'},textColor:{type:'string'},x:{type:'number'},y:{type:'number'},width:{type:'number'},height:{type:'number'},maxWidth:{type:'number'},maxHeight:{type:'number'},radius:{type:'number'},rotation:{type:'number'},opacity:{type:'number'},shadow:{type:'boolean'},shadowBlur:{type:'number'},shadowY:{type:'number'},align:{type:'string'},shape:{type:'string',enum:['circle','roundRect','line','burst']},fill:{type:'string'},stroke:{type:'string'},strokeWidth:{type:'number'}},required:['type','x','y']}}},required:['id','name','description','background','layers']};
+  const SYSTEM=`You are the master template designer for British Facebook, a browser-based product advertising CMS. Analyze the reference image and convert its visual composition into ONE reusable JSON template. Do NOT create a final image. Your output must be directly renderable by this CMS.
+
+SUPPORTED COMPONENTS ONLY:
+- canvas is 1080x1080.
+- background: mode adaptive or fixed, with start/end colors.
+- layers type text, product, badge, shape.
+- shapes: circle, roundRect, line, burst.
+- product uses source {{product_image}}, maxWidth/maxHeight, x/y, rotation, shadow.
+- text can use {{brand}}, {{headline}}, {{subline}}, {{footer}}, {{product_name}}, {{promo}}, {{price}}.
+- badges can use PROMO, COD, GRATIS ONGKIR, BEST SELLER, STOK TERBATAS, PREMIUM, ORIGINAL.
+- fonts: Poppins, Montserrat, Anton, Bebas Neue, Oswald, Roboto, Roboto Slab, Rubik, DM Sans, Manrope, Raleway, Inter, Space Grotesk, Playfair Display, Lobster, Pacifico, Titan One.
+- effects are limited to shadow, opacity, rotation, stroke/outline.
+
+IMPORTANT DESIGN RULES:
+- Preserve the reference's visual hierarchy, asymmetry, spacing, scale relationships and premium advertising feel.
+- The product must remain the visual focus.
+- Do not invent unsupported icons, SVG, photos, CSS, HTML, JavaScript, gradients inside layers, or external assets.
+- Do not put long text into the template. Use variables for editable copy.
+- Keep all coordinates inside the 1080x1080 canvas.
+- Use at most 14 layers.
+- Prefer adaptive background when the reference relies on a strong product-colored background.
+- Return JSON only.`;
+  function getSaved(){try{return JSON.parse(localStorage.getItem(TEMPLATE_STORE)||'[]')}catch{return[]}}
+  function saveSaved(a){localStorage.setItem(TEMPLATE_STORE,JSON.stringify(a))}
+  function inject(){if($('#bfAiPanel'))return;const host=$('#templates');if(!host)return;const wrap=document.createElement('div');wrap.id='bfAiPanel';wrap.className='panel ai-panel';wrap.innerHTML=`<div class="panel-head"><div><h2>✨ AI Template Designer</h2><p>Upload contoh desain. Gemini akan membuat <b>master template</b> yang sesuai kemampuan CMS.</p></div><span class="ai-local">AI only for templates</span></div><div class="ai-grid"><div><label class="dropzone ai-drop"><input id="bfAiRef" type="file" accept="image/png,image/jpeg,image/webp" hidden><div class="upload-icon">＋</div><b>Upload desain referensi</b><span id="bfAiFile">PNG, JPG, WEBP</span></label><div id="bfAiRefPreview" class="ai-ref-preview"></div></div><div class="ai-controls"><label class="field">Gemini API Key<input id="bfGeminiKey" type="password" placeholder="Paste Gemini API key"></label><div class="ai-warning">Untuk versi GitHub Pages, key berada di browser. Jangan gunakan key produksi dengan akses luas. Untuk produksi aman, gunakan serverless proxy.</div><label class="field">Model<select id="bfAiModel"><option value="gemini-3.8-flash">Gemini 3.8 Flash</option><option value="gemini-3.7-flash">Gemini 3.7 Flash</option></select></label><label class="field">Arahan tambahan<textarea id="bfAiInstruction" rows="4" placeholder="Contoh: buat lebih mirip iklan merah, produk besar, headline kuat, komposisi tidak simetris."></textarea></label><button id="bfGenerateAI" class="primary">✨ Generate AI Template</button><div id="bfAiStatus" class="ai-status"></div></div></div><div id="bfAiResult" class="ai-result hidden"></div>`;host.prepend(wrap);
+    const key=localStorage.getItem(KEY_STORE)||'';$('#bfGeminiKey').value=key;
+    $('#bfAiRef').onchange=e=>{const f=e.target.files[0];if(!f)return;$('#bfAiFile').textContent=f.name;const u=URL.createObjectURL(f);$('#bfAiRefPreview').innerHTML=`<img src="${u}" alt="Reference">`};
+    $('#bfGenerateAI').onclick=generate;
+  }
+  function file64(file){return new Promise((res,rej)=>{const r=new FileReader;r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file)})}
+  function sanitize(t){
+    const fonts=new Set(['Poppins','Montserrat','Anton','Bebas Neue','Oswald','Roboto','Roboto Slab','Rubik','DM Sans','Manrope','Raleway','Inter','Space Grotesk','Playfair Display','Lobster','Pacifico','Titan One']);
+    const allowedShapes=new Set(['circle','roundRect','line','burst']);
+    t.id=(t.id||'ai-template-'+Date.now()).toLowerCase().replace(/[^a-z0-9-]/g,'-').slice(0,50);
+    t.name=String(t.name||'AI Template').slice(0,80);t.description=String(t.description||'AI generated reusable template').slice(0,180);t.preview=t.preview||'#9d1018';
+    t.background=t.background||{mode:'adaptive'};t.background.mode=t.background.mode==='fixed'?'fixed':'adaptive';
+    t.layers=Array.isArray(t.layers)?t.layers.slice(0,14):[];
+    t.layers=t.layers.map(o=>{o={...o};o.x=Math.max(0,Math.min(1080,Number(o.x)||0));o.y=Math.max(0,Math.min(1080,Number(o.y)||0));if(o.type==='text'){o.font=fonts.has(o.font)?o.font:'Poppins';o.size=Math.max(10,Math.min(180,Number(o.size)||40));o.weight=[400,500,600,700,800,900].includes(Number(o.weight))?Number(o.weight):700;o.content=String(o.content||'{{headline}}');}if(o.type==='shape')o.shape=allowedShapes.has(o.shape)?o.shape:'circle';if(o.type==='product'){o.source='{{product_image}}';o.maxWidth=Math.max(120,Math.min(900,Number(o.maxWidth)||600));o.maxHeight=Math.max(120,Math.min(900,Number(o.maxHeight)||600));}if(o.type==='badge')o.text=String(o.text||'PROMO').slice(0,30);return o});
+    return t;
+  }
+  function findText(obj){for(const st of (obj.steps||[])){if(st.type==='model_output'&&Array.isArray(st.content)){for(const c of st.content){if(c.type==='text'&&c.text)return c.text}}}return obj.output_text||obj.outputText||''}
+  async function generate(){const key=$('#bfGeminiKey').value.trim(),file=$('#bfAiRef').files[0];if(!key)return alert('Masukkan Gemini API Key terlebih dahulu.');if(!file)return alert('Upload gambar desain referensi terlebih dahulu.');localStorage.setItem(KEY_STORE,key);const btn=$('#bfGenerateAI'),status=$('#bfAiStatus');btn.disabled=true;status.textContent='Menganalisis desain referensi...';try{const b64=await file64(file),instruction=$('#bfAiInstruction').value.trim();const prompt=SYSTEM+(instruction?'\n\nUSER DIRECTION:\n'+instruction:'')+'\n\nAnalyze this reference and recreate its layout as a reusable British Facebook template. Use variables instead of hardcoded product-specific text.';const body={model:$('#bfAiModel').value,input:[{type:'text',text:prompt},{type:'image',data:b64,mime_type:file.type}],response_format:{type:'text',mime_type:'application/json',schema}};const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data?.error?.message||'Gemini API request failed');let raw=findText(data).trim().replace(/^```json\s*/i,'').replace(/```$/,'').trim();const template=sanitize(JSON.parse(raw));const arr=getSaved().filter(x=>x.id!==template.id);arr.push(template);saveSaved(arr);window.BF_TEMPLATES=window.BF_TEMPLATES||[];const idx=window.BF_TEMPLATES.findIndex(x=>x.id===template.id);if(idx>=0)window.BF_TEMPLATES[idx]=template;else window.BF_TEMPLATES.push(template);if(window.BF&&typeof populateTemplates==='function')populateTemplates();$('#bfAiResult').classList.remove('hidden');$('#bfAiResult').innerHTML=`<div class="ai-success"><b>Template berhasil dibuat: ${esc(template.name)}</b><span>${esc(template.description)}</span><code>${esc(JSON.stringify(template,null,2))}</code><button id="bfUseAI" class="primary">Gunakan Template Ini</button></div>`;$('#bfUseAI').onclick=()=>{if(window.BF&&typeof populateTemplates==='function')populateTemplates();alert('Template sudah masuk ke Template Library. Centang template tersebut lalu kembali ke Image Generator.')};status.textContent='Selesai. Gemini hanya dipakai untuk membuat template.'}catch(e){console.error(e);status.textContent='Gagal';$('#bfAiResult').classList.remove('hidden');$('#bfAiResult').innerHTML=`<div class="ai-error"><b>Generate gagal</b><span>${esc(e.message)}</span></div>`}finally{btn.disabled=false}}
+  window.addEventListener('DOMContentLoaded',()=>setTimeout(inject,100));
+})();
